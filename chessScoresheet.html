@@ -74,8 +74,8 @@
     display: grid;
     grid-template-columns: repeat(8, 1fr);
     grid-template-rows: repeat(8, 1fr);
-    width: min(92vw, 420px);
-    height: min(92vw, 420px);
+    width: min(90vw, 62vh, 400px);
+    height: min(90vw, 62vh, 400px);
     border: 2px solid var(--border);
     border-radius: 6px;
     overflow: hidden;
@@ -912,13 +912,23 @@ moveInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventD
 moveInput.addEventListener('input', clearError);
 
 document.querySelectorAll('.tab-btn').forEach(tb => {
-  tb.addEventListener('click', () => {
-    document.querySelectorAll('.tab-btn').forEach(x => x.classList.remove('active'));
-    tb.classList.add('active');
-    document.getElementById('boardPanel').classList.toggle('active', tb.dataset.tab === 'board');
-    document.getElementById('movesPanel').classList.toggle('active', tb.dataset.tab === 'moves');
-  });
+  tb.addEventListener('click', () => setActiveTab(tb.dataset.tab));
 });
+
+function setActiveTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(x => x.classList.toggle('active', x.dataset.tab === tab));
+  document.getElementById('boardPanel').classList.toggle('active', tab === 'board');
+  document.getElementById('movesPanel').classList.toggle('active', tab === 'moves');
+
+  // On the Board tab, moves are made by tapping/dragging pieces directly, so the
+  // typing keypad is unneeded — hide it to leave the board room to fully fit on screen.
+  const isBoard = tab === 'board';
+  document.querySelector('.preview-row').style.display = isBoard ? 'none' : 'flex';
+  document.querySelectorAll('.pad-grid').forEach(g => { g.style.display = isBoard ? 'none' : 'grid'; });
+  recordBtn.style.display = isBoard ? 'none' : 'block';
+}
+setActiveTab('board');
+
 
 exportBtn.addEventListener('click', () => exportMenu.classList.add('visible'));
 closeExportBtn.addEventListener('click', () => exportMenu.classList.remove('visible'));
