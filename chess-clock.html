@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Chess Clock</title>
+<style>
+  :root {
+    --bg: #12141a;
+    --panel: #1b1e27;
+    --accent: #e8c15a;
+    --text: #f4f4f2;
+    --text-dim: #8b8f9a;
+    --active-glow: 0 0 0 4px rgba(232, 193, 90, 0.15) inset;
+    --danger: #d9534f;
+    --field-bg: #21242e;
+    --border: #2c303a;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    height: 100%;
+    margin: 0;
+    background: var(--bg);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    color: var(--text);
+    overflow: hidden;
+  }
+
+  /* ---------- SETUP SCREEN ---------- */
+  #setupScreen {
+    height: 100vh;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    padding: max(20px, env(safe-area-inset-top)) 20px max(20px, env(safe-area-inset-bottom));
+    overflow-y: auto;
+  }
+  #setupScreen h1 {
+    font-size: 22px;
+    margin: 4px 0 18px;
+    text-align: center;
+    letter-spacing: 1px;
+  }
+  .setup-form { flex: 1; display: flex; flex-direction: column; gap: 16px; max-width: 480px; margin: 0 auto; width: 100%; }
+  .field-group {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+  }
+  .field-group legend, .field-label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-dim);
+    margin-bottom: 10px;
+    display: block;
+  }
+  .preset-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .preset-btn {
+    background: var(--field-bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 4px;
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .preset-btn.selected {
+    background: var(--accent);
+    color: #1b1e27;
+    border-color: var(--accent);
+    font-weight: 700;
+  }
+  .row { display: flex; gap: 10px; align-items: center; }
+  .row + .row { margin-top: 10px; }
+  .row label { flex: 1; font-size: 14px; color: var(--text-dim); }
+  input[type="number"] {
+    width: 90px;
+    background: var(--field-bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 16px;
+    font-family: inherit;
+    text-align: center;
+  }
+  select {
+    background: var(--field-bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    font-family: inherit;
+    font-size: 14px;
+    width: 100%;
+  }
+  .mode-desc {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-top: 8px;
+    line-height: 1.4;
+  }
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .switch {
+    position: relative;
+    width: 46px;
+    height: 26px;
+    flex-shrink: 0;
+  }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider {
+    position: absolute;
+    inset: 0;
+    background: var(--field-bg);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: 0.2s;
+  }
+  .slider::before {
+    content: "";
+    position: absolute;
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    top: 3px;
+    background: var(--text-dim);
+    border-radius: 50%;
+    transition: 0.2s;
+  }
+  .switch input:checked + .slider { background: rgba(232,193,90,0.25); border-color: var(--accent); }
+  .switch input:checked + .slider::before { transform: translateX(20px); background: var(--accent); }
+  #stageFields { margin-top: 12px; display: none; }
+  #stageFields.visible { display: block; }
+
+  #startGameBtn {
+    background: var(--accent);
+    color: #1b1e27;
+    font-weight: 700;
+    border: none;
+    border-radius: 12px;
+    padding: 16px;
+    font-size: 17px;
+    font-family: inherit;
+    cursor: pointer;
+    margin-top: 4px;
+  }
+  #startGameBtn:active { transform: scale(0.98); }
+
+  /* ---------- CLOCK SCREEN ---------- */
+  #clockScreen { display: none; height: 100vh; height: 100dvh; flex-direction: column; }
+  #clockScreen.visible { display: flex; }
+
+  .players { flex: 1; display: flex; flex-direction: column; }
+  .player {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--panel);
+    border: none;
+    color: var(--text-dim);
+    font-family: inherit;
+    cursor: pointer;
+    position: relative;
+    transition: background 0.2s ease, color 0.2s ease;
+    user-select: none;
+    padding: 10px;
+  }
+  .player:nth-child(1) { transform: rotate(180deg); border-bottom: 1px solid #000; }
+  .player.active { background: #23271f; color: var(--accent); box-shadow: var(--active-glow); }
+  .player.low-time.active { color: var(--danger); }
+  .player .time {
+    font-size: 13vh;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 2px;
+    line-height: 1;
+  }
+  .player .label {
+    position: absolute;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 13px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .player .label .swatch {
+    width: 10px; height: 10px; border-radius: 50%;
+    display: inline-block;
+  }
+  .swatch.white { background: #eee; }
+  .swatch.black { background: #333; border: 1px solid #666; }
+  .player.active .label { color: var(--accent); }
+  .player .meta {
+    position: absolute;
+    bottom: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 12px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+  }
+  .player.active .meta { color: var(--accent); opacity: 0.85; }
+  .player.delay-active .meta { color: var(--danger); }
+
+  .controls {
+    background: #0d0f14;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 10px;
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+    border-top: 1px solid #000;
+    flex-wrap: wrap;
+  }
+  .controls button {
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-family: inherit;
+    font-size: 14px;
+    cursor: pointer;
+    min-height: 44px;
+  }
+  .controls button:active { transform: scale(0.96); }
+  #playPause { background: var(--accent); color: #1b1e27; font-weight: 700; border: none; flex: 1; max-width: 160px; }
+
+  .paused-overlay {
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.55);
+    color: var(--text);
+    font-size: 20px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    pointer-events: none;
+    z-index: 5;
+    text-align: center;
+    padding: 20px;
+  }
+  body.paused .paused-overlay { display: flex; }
+  .flag { color: var(--danger) !important; }
+</style>
+</head>
+<body>
+
+<!-- ================= SETUP SCREEN ================= -->
+<div id="setupScreen">
+  <h1>Chess Clock Setup</h1>
+  <div class="setup-form">
+
+    <div class="field-group">
+      <span class="field-label">Time per side</span>
+      <div class="preset-row" id="presetRow">
+        <button class="preset-btn" data-min="1">1 min</button>
+        <button class="preset-btn" data-min="3">3 min</button>
+        <button class="preset-btn selected" data-min="5">5 min</button>
+        <button class="preset-btn" data-min="10">10 min</button>
+        <button class="preset-btn" data-min="15">15 min</button>
+        <button class="preset-btn" data-min="30">30 min</button>
+      </div>
+      <div class="row">
+        <label for="customMinutes">Custom minutes</label>
+        <input type="number" id="customMinutes" min="0" step="0.5" placeholder="e.g. 5">
+      </div>
+    </div>
+
+    <div class="field-group">
+      <span class="field-label">Increment / Delay</span>
+      <select id="modeSelect">
+        <option value="none">None</option>
+        <option value="fischer">Fischer increment</option>
+        <option value="delay">Delay (Bronstein / US)</option>
+      </select>
+      <div class="row" id="bonusSecondsRow" style="margin-top:10px; display:none;">
+        <label for="bonusSeconds">Seconds per move</label>
+        <input type="number" id="bonusSeconds" min="0" step="1" value="5">
+      </div>
+      <div class="mode-desc" id="modeDesc">No time added or delayed per move — simple countdown, as in a basic sudden-death game.</div>
+    </div>
+
+    <div class="field-group">
+      <div class="toggle-row">
+        <span class="field-label" style="margin-bottom:0;">Second time control stage</span>
+        <label class="switch">
+          <input type="checkbox" id="stageToggle">
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div id="stageFields">
+        <div class="row">
+          <label for="stageMoves">After move number</label>
+          <input type="number" id="stageMoves" min="1" step="1" value="40">
+        </div>
+        <div class="row">
+          <label for="stageMinutes">Add minutes</label>
+          <input type="number" id="stageMinutes" min="0" step="1" value="30">
+        </div>
+        <div class="mode-desc">Once each player reaches this move number, the extra time is added to their clock once — e.g. classic "40 moves in 90 min, then 30 min for the rest".</div>
+      </div>
+    </div>
+
+    <button id="startGameBtn">Start Game</button>
+  </div>
+</div>
+
+<!-- ================= CLOCK SCREEN ================= -->
+<div id="clockScreen">
+  <div class="players">
+    <button class="player" id="playerTop" aria-label="Black clock">
+      <span class="label"><span class="swatch black"></span>Black</span>
+      <span class="time" id="timeTop">05:00</span>
+      <span class="meta" id="metaTop">Move 1</span>
+    </button>
+    <button class="player" id="playerBottom" aria-label="White clock">
+      <span class="label"><span class="swatch white"></span>White</span>
+      <span class="time" id="timeBottom">05:00</span>
+      <span class="meta" id="metaBottom">Move 1</span>
+    </button>
+  </div>
+
+  <div class="controls">
+    <button id="settingsBtn">Settings</button>
+    <button id="playPause">Start</button>
+    <button id="resetBtn">Reset</button>
+  </div>
+</div>
+
+<div class="paused-overlay" id="pausedOverlay">Paused — tap Start to resume</div>
+
+<script>
+(function () {
+  // ---------- DOM refs ----------
+  const setupScreen = document.getElementById('setupScreen');
+  const clockScreen = document.getElementById('clockScreen');
+  const presetRow = document.getElementById('presetRow');
+  const customMinutes = document.getElementById('customMinutes');
+  const modeSelect = document.getElementById('modeSelect');
+  const bonusSecondsRow = document.getElementById('bonusSecondsRow');
+  const bonusSeconds = document.getElementById('bonusSeconds');
+  const modeDesc = document.getElementById('modeDesc');
+  const stageToggle = document.getElementById('stageToggle');
+  const stageFields = document.getElementById('stageFields');
+  const stageMoves = document.getElementById('stageMoves');
+  const stageMinutes = document.getElementById('stageMinutes');
+  const startGameBtn = document.getElementById('startGameBtn');
+
+  const timeTopEl = document.getElementById('timeTop');
+  const timeBottomEl = document.getElementById('timeBottom');
+  const metaTop = document.getElementById('metaTop');
+  const metaBottom = document.getElementById('metaBottom');
+  const playerTop = document.getElementById('playerTop');     // Black
+  const playerBottom = document.getElementById('playerBottom'); // White
+  const playPauseBtn = document.getElementById('playPause');
+  const resetBtn = document.getElementById('resetBtn');
+  const settingsBtn = document.getElementById('settingsBtn');
+
+  // ---------- Setup screen interactions ----------
+  let selectedPreset = 5;
+  presetRow.addEventListener('click', (e) => {
+    const btn = e.target.closest('.preset-btn');
+    if (!btn) return;
+    [...presetRow.children].forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    selectedPreset = parseFloat(btn.dataset.min);
+    customMinutes.value = '';
+  });
+  customMinutes.addEventListener('input', () => {
+    if (customMinutes.value !== '') {
+      [...presetRow.children].forEach(b => b.classList.remove('selected'));
+    }
+  });
+
+  const modeDescriptions = {
+    none: 'No time added or delayed per move — simple countdown, as in a basic sudden-death game.',
+    fischer: 'Each player gains this many seconds on their own clock immediately after making a move (added to their time when they pass the turn).',
+    delay: 'Each turn, the clock waits this many seconds before the main time starts counting down — gives a grace period per move without adding time (Bronstein / US delay behave the same way on a digital clock).'
+  };
+  modeSelect.addEventListener('change', () => {
+    modeDesc.textContent = modeDescriptions[modeSelect.value];
+    bonusSecondsRow.style.display = modeSelect.value === 'none' ? 'none' : 'flex';
+  });
+
+  stageToggle.addEventListener('change', () => {
+    stageFields.classList.toggle('visible', stageToggle.checked);
+  });
+
+  // ---------- Game state ----------
+  let baseSeconds = 300;
+  let bonusSecs = 0;
+  let mode = 'none'; // none | fischer | delay
+  let stageEnabled = false;
+  let stageAtMove = 40;
+  let stageAddSeconds = 0;
+
+  let timeWhite, timeBlack;
+  let delayRemainingWhite = 0, delayRemainingBlack = 0; // for delay mode
+  let moveCountWhite = 1, moveCountBlack = 1;
+  let stageAppliedWhite = false, stageAppliedBlack = false;
+
+  let activePlayer = null; // 'white' | 'black' | null
+  let running = false;
+  let intervalId = null;
+  let lastTick = null;
+
+  function formatTime(seconds) {
+    if (seconds < 0) seconds = 0;
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    if (seconds < 10 && seconds > 0) {
+      const tenths = Math.floor((seconds % 1) * 10);
+      return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}.${tenths}`;
+    }
+    return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  }
+
+  function buildDescriptionMeta(color) {
+    const moveNum = color === 'white' ? moveCountWhite : moveCountBlack;
+    let text = `Move ${moveNum}`;
+    if (mode === 'fischer' && bonusSecs > 0) text += ` · +${bonusSecs}s/move`;
+    if (mode === 'delay' && bonusSecs > 0) text += ` · ${bonusSecs}s delay`;
+    return text;
+  }
+
+  function render() {
+    timeTopEl.textContent = formatTime(timeBlack);
+    timeBottomEl.textContent = formatTime(timeWhite);
+
+    metaTop.textContent = buildDescriptionMeta('black');
+    metaBottom.textContent = buildDescriptionMeta('white');
+
+    playerTop.classList.toggle('active', activePlayer === 'black');
+    playerBottom.classList.toggle('active', activePlayer === 'white');
+
+    playerTop.classList.toggle('low-time', timeBlack <= 30);
+    playerBottom.classList.toggle('low-time', timeWhite <= 30);
+
+    playerTop.classList.toggle('flag', timeBlack <= 0);
+    playerBottom.classList.toggle('flag', timeWhite <= 0);
+
+    const blackInDelay = mode === 'delay' && activePlayer === 'black' && delayRemainingBlack > 0;
+    const whiteInDelay = mode === 'delay' && activePlayer === 'white' && delayRemainingWhite > 0;
+    playerTop.classList.toggle('delay-active', blackInDelay);
+    playerBottom.classList.toggle('delay-active', whiteInDelay);
+    if (blackInDelay) metaTop.textContent = `Delay ${delayRemainingBlack.toFixed(1)}s`;
+    if (whiteInDelay) metaBottom.textContent = `Delay ${delayRemainingWhite.toFixed(1)}s`;
+
+    document.body.classList.toggle('paused', !running && activePlayer !== null);
+  }
+
+  function tick() {
+    const now = performance.now();
+    const delta = (now - lastTick) / 1000;
+    lastTick = now;
+
+    if (activePlayer === 'white') {
+      if (mode === 'delay' && delayRemainingWhite > 0) {
+        delayRemainingWhite = Math.max(0, delayRemainingWhite - delta);
+      } else {
+        timeWhite = Math.max(0, timeWhite - delta);
+        if (timeWhite === 0) stopClock();
+      }
+    } else if (activePlayer === 'black') {
+      if (mode === 'delay' && delayRemainingBlack > 0) {
+        delayRemainingBlack = Math.max(0, delayRemainingBlack - delta);
+      } else {
+        timeBlack = Math.max(0, timeBlack - delta);
+        if (timeBlack === 0) stopClock();
+      }
+    }
+    render();
+  }
+
+  function startClock() {
+    if (activePlayer === null) activePlayer = 'white'; // White always starts (Art. 6.5)
+    if (timeWhite <= 0 || timeBlack <= 0) return;
+    running = true;
+    lastTick = performance.now();
+    intervalId = setInterval(tick, 50);
+    playPauseBtn.textContent = 'Pause';
+    render();
+  }
+
+  function stopClock() {
+    running = false;
+    clearInterval(intervalId);
+    intervalId = null;
+    playPauseBtn.textContent = 'Start';
+    render();
+  }
+
+  function togglePlayPause() {
+    if (running) stopClock(); else startClock();
+  }
+
+  function applyStageIfDue(color) {
+    if (!stageEnabled) return;
+    if (color === 'white' && !stageAppliedWhite && moveCountWhite > stageAtMove) {
+      timeWhite += stageAddSeconds;
+      stageAppliedWhite = true;
+    }
+    if (color === 'black' && !stageAppliedBlack && moveCountBlack > stageAtMove) {
+      timeBlack += stageAddSeconds;
+      stageAppliedBlack = true;
+    }
+  }
+
+  function switchTurn(clicked) {
+    if (!running) return;
+    if (clicked !== activePlayer) return;
+
+    // Apply Fischer increment to the player who just moved
+    if (mode === 'fischer' && bonusSecs > 0) {
+      if (clicked === 'white') timeWhite += bonusSecs;
+      else timeBlack += bonusSecs;
+    }
+
+    // Advance move counter for the player who just moved, check stage bonus
+    if (clicked === 'white') {
+      moveCountWhite += 1;
+      applyStageIfDue('white');
+    } else {
+      moveCountBlack += 1;
+      applyStageIfDue('black');
+    }
+
+    activePlayer = clicked === 'white' ? 'black' : 'white';
+
+    // Reset delay for the player who is now becoming active
+    if (mode === 'delay') {
+      if (activePlayer === 'white') delayRemainingWhite = bonusSecs;
+      else delayRemainingBlack = bonusSecs;
+    }
+
+    render();
+  }
+
+  function resetClock() {
+    stopClock();
+    timeWhite = baseSeconds;
+    timeBlack = baseSeconds;
+    delayRemainingWhite = 0;
+    delayRemainingBlack = 0;
+    moveCountWhite = 1;
+    moveCountBlack = 1;
+    stageAppliedWhite = false;
+    stageAppliedBlack = false;
+    activePlayer = null;
+    render();
+  }
+
+  playerTop.addEventListener('click', () => switchTurn('black'));
+  playerBottom.addEventListener('click', () => switchTurn('white'));
+  playPauseBtn.addEventListener('click', togglePlayPause);
+  resetBtn.addEventListener('click', resetClock);
+
+  settingsBtn.addEventListener('click', () => {
+    stopClock();
+    clockScreen.classList.remove('visible');
+    setupScreen.style.display = 'flex';
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (clockScreen.classList.contains('visible') === false) return;
+    if (e.code === 'Space') { e.preventDefault(); togglePlayPause(); }
+    else if (e.code === 'ArrowUp') switchTurn('black');
+    else if (e.code === 'ArrowDown') switchTurn('white');
+  });
+
+  // ---------- Start game from setup ----------
+  startGameBtn.addEventListener('click', () => {
+    const minutes = customMinutes.value !== '' ? parseFloat(customMinutes.value) : selectedPreset;
+    baseSeconds = Math.max(0, minutes) * 60;
+
+    mode = modeSelect.value;
+    bonusSecs = mode === 'none' ? 0 : Math.max(0, parseInt(bonusSeconds.value, 10) || 0);
+
+    stageEnabled = stageToggle.checked;
+    stageAtMove = Math.max(1, parseInt(stageMoves.value, 10) || 40);
+    stageAddSeconds = Math.max(0, parseInt(stageMinutes.value, 10) || 0) * 60;
+
+    resetClock();
+
+    setupScreen.style.display = 'none';
+    clockScreen.classList.add('visible');
+  });
+
+  // Init defaults for first paint (in case someone opens dev tools etc.)
+  timeWhite = baseSeconds;
+  timeBlack = baseSeconds;
+})();
+</script>
+
+</body>
+</html>
