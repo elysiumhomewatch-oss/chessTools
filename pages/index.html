@@ -1056,18 +1056,25 @@ async function pollIce(code, role) {
     const res = await fetch(`${WORKER_URL}/api/game/${code}`);
     if (!res.ok) return;
     const data = await res.json();
-    const incoming = role === 'host' ? data.guestIce : data.hostIce;
-    const seenKey = role === 'host' ? 'seenGuestIce' : 'seenHostIce';
-    for (let i = onlineState[seenKey]; i < incoming.length; i++) {
-      try { await onlineState.pc.addIceCandidate(incoming[i]); } catch (err) {}
-    }
-    onlineState[seenKey] = incoming.length;
+
+    // Must set the remote description (the answer) BEFORE adding remote ICE
+    // candidates — addIceCandidate throws if called first, per the WebRTC spec.
     if (role === 'host' && data.answer && !onlineState.pc.currentRemoteDescription) {
       await onlineState.pc.setRemoteDescription(data.answer);
       setOnlineStatus('Opponent found — connecting…');
     }
-  } catch (err) {}
+
+    if (onlineState.pc.remoteDescription) {
+      const incoming = role === 'host' ? data.guestIce : data.hostIce;
+      const seenKey = role === 'host' ? 'seenGuestIce' : 'seenHostIce';
+      for (let i = onlineState[seenKey]; i < incoming.length; i++) {
+        try { await onlineState.pc.addIceCandidate(incoming[i]); } catch (err) { console.error('addIceCandidate failed:', err); }
+      }
+      onlineState[seenKey] = incoming.length;
+    }
+  } catch (err) { console.error('pollIce failed:', err); }
 }
+
 
 function postIce(code, role, candidate) {
   fetch(`${WORKER_URL}/api/ice/${code}`, {
