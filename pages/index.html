@@ -636,8 +636,16 @@ const PIECE_GLYPH = { K:'♔',Q:'♕',R:'♖',B:'♗',N:'♘',P:'♙', k:'♚',q
    The Cloudflare Worker + D1 are only a mailbox for exchanging the
    SDP offer/answer and ICE candidates during connection setup.
    ============================================================ */
-const WORKER_URL = 'https://chess-relay.morneydeetlefs.workers.dev';
-const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
+const WORKER_URL = 'https://chess-relay.YOUR-SUBDOMAIN.workers.dev'; // <-- set this after deploying the worker
+const ICE_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  // TURN fallback — only used if a direct connection can't be established
+  // (e.g. symmetric NAT on one side). Open Relay Project (metered.ca): free, no card.
+  { urls: 'stun:openrelay.metered.ca:80' },
+  { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
+];
 
 const onlineState = {
   active: false,      // host or guest of an online game (pending or connected)
@@ -1068,7 +1076,7 @@ function waitForIceGatheringComplete(pc) {
       }
     }
     pc.addEventListener('icegatheringstatechange', check);
-    setTimeout(resolve, 3000); // don't block forever if gathering stalls
+    setTimeout(resolve, 5000); // don't block forever if gathering stalls (TURN relay candidates take a bit longer than plain STUN)
   });
 }
 
