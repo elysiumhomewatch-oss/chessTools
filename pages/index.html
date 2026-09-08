@@ -634,7 +634,7 @@ const PIECE_GLYPH = { K:'♔',Q:'♕',R:'♖',B:'♗',N:'♘',P:'♙', k:'♚',q
    The Cloudflare Worker + D1 are only a mailbox for exchanging the
    SDP offer/answer and ICE candidates during connection setup.
    ============================================================ */
-const WORKER_URL = 'https://chess-relay.morneydeetlefs.workers.dev';
+const WORKER_URL = 'https://chess-relay.YOUR-SUBDOMAIN.workers.dev'; // <-- set this after deploying the worker
 const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
 
 const onlineState = {
@@ -1058,6 +1058,13 @@ async function pollIce(code, role) {
   } catch (err) {}
 }
 
+function postIce(code, role, candidate) {
+  fetch(`${WORKER_URL}/api/ice/${code}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ role, candidate }),
+  }).catch(() => {});
+}
+
 async function createOnlineGame() {
   if (WORKER_URL.includes('YOUR-SUBDOMAIN')) { showOnlineError('Set WORKER_URL in the code first.'); return; }
   resetOnlineState();
@@ -1070,13 +1077,12 @@ async function createOnlineGame() {
     const channel = pc.createDataChannel('chess');
     onlineState.channel = channel;
     setupDataChannelHandlers(channel);
+    const pendingIce = []; // buffer candidates gathered before the room code exists
     pc.onicecandidate = e => {
-      if (e.candidate) {
-        fetch(`${WORKER_URL}/api/ice/${onlineState.code}`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ role: 'host', candidate: e.candidate.toJSON() }),
-        }).catch(() => {});
-      }
+      if (!e.candidate) return;
+      const cand = e.candidate.toJSON();
+      if (onlineState.code) postIce(onlineState.code, 'host', cand);
+      else pendingIce.push(cand);
     };
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
@@ -1087,6 +1093,8 @@ async function createOnlineGame() {
     });
     const data = await res.json();
     onlineState.code = data.code;
+    pendingIce.forEach(cand => postIce(onlineState.code, 'host', cand));
+    pendingIce.length = 0;
     document.getElementById('roomCodeDisplay').textContent = data.code;
     document.getElementById('onlineCreateResult').style.display = 'block';
     document.getElementById('leaveOnlineBtn').style.display = 'block';
@@ -1097,6 +1105,7 @@ async function createOnlineGame() {
     resetOnlineState();
   }
 }
+
 
 async function joinOnlineGame(code) {
   if (WORKER_URL.includes('YOUR-SUBDOMAIN')) { showOnlineError('Set WORKER_URL in the code first.'); return; }
@@ -1115,14 +1124,7 @@ async function joinOnlineGame(code) {
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     onlineState.pc = pc;
     pc.ondatachannel = e => { onlineState.channel = e.channel; setupDataChannelHandlers(e.channel); };
-    pc.onicecandidate = e => {
-      if (e.candidate) {
-        fetch(`${WORKER_URL}/api/ice/${code}`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ role: 'guest', candidate: e.candidate.toJSON() }),
-        }).catch(() => {});
-      }
-    };
+    pc.onicecandidate = e => { if (e.candidate) postIce(code, 'guest', e.candidate.toJSON()); };
     await pc.setRemoteDescription(data.offer);
     for (const cand of data.hostIce) { try { await pc.addIceCandidate(cand); } catch (err) {} }
     onlineState.seenHostIce = data.hostIce.length;
