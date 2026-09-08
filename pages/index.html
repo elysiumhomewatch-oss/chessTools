@@ -1021,6 +1021,17 @@ function handleOnlineMessage(msg) {
   }
 }
 
+function watchConnectionState(pc) {
+  pc.onconnectionstatechange = () => {
+    if (pc.connectionState === 'failed') {
+      showOnlineError('Could not establish a connection between devices. Try again — if it keeps failing, one device may be on a network that blocks peer-to-peer connections.');
+      document.getElementById('onlineModal').classList.add('visible');
+      resetOnlineState();
+      renderAll();
+    }
+  };
+}
+
 function setupDataChannelHandlers(channel) {
   channel.onopen = () => {
     onlineState.connected = true;
@@ -1077,6 +1088,7 @@ async function createOnlineGame() {
     const channel = pc.createDataChannel('chess');
     onlineState.channel = channel;
     setupDataChannelHandlers(channel);
+    watchConnectionState(pc);
     const pendingIce = []; // buffer candidates gathered before the room code exists
     pc.onicecandidate = e => {
       if (!e.candidate) return;
@@ -1124,6 +1136,7 @@ async function joinOnlineGame(code) {
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     onlineState.pc = pc;
     pc.ondatachannel = e => { onlineState.channel = e.channel; setupDataChannelHandlers(e.channel); };
+    watchConnectionState(pc);
     pc.onicecandidate = e => { if (e.candidate) postIce(code, 'guest', e.candidate.toJSON()); };
     await pc.setRemoteDescription(data.offer);
     for (const cand of data.hostIce) { try { await pc.addIceCandidate(cand); } catch (err) {} }

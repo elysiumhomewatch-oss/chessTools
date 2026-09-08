@@ -97,13 +97,12 @@ export default {
         return json({ error: 'missing/invalid role or candidate' }, 400);
       }
       const col = body.role === 'host' ? 'host_ice' : 'guest_ice';
-      const row = await env.DB.prepare(`SELECT ${col} as ice FROM games WHERE code = ?`).bind(code).first();
-      if (!row) return json({ error: 'not found' }, 404);
-
-      const arr = JSON.parse(row.ice || '[]');
-      arr.push(body.candidate);
-      await env.DB.prepare(`UPDATE games SET ${col} = ?, updated_at = ? WHERE code = ?`)
-        .bind(JSON.stringify(arr), Date.now(), code).run();
+      // Atomic append via SQLite's JSON functions — avoids the read-modify-write
+      // race that dropped candidates when several arrived close together.
+      const result = await env.DB.prepare(
+        `UPDATE games SET ${col} = json_insert(${col}, '$[#]', json(?)), updated_at = ? WHERE code = ?`
+      ).bind(JSON.stringify(body.candidate), Date.now(), code).run();
+      if (result.meta.changes === 0) return json({ error: 'not found' }, 404);
       return json({ ok: true });
     }
 
