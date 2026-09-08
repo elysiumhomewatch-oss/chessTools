@@ -228,6 +228,7 @@
 
   .online-badge { display: none; align-items: center; gap: 6px; font-size: 12px; color: var(--accent); margin-top: 6px; }
   .online-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); flex-shrink: 0; }
+  .flip-board-btn { background: transparent; border: 1px solid var(--border); color: var(--text-dim); border-radius: 8px; padding: 6px 12px; font-size: 12px; font-family: inherit; cursor: pointer; margin-top: 10px; }
 </style>
 </head>
 <body>
@@ -261,6 +262,7 @@
       <div style="display:flex; flex-direction:column; align-items:center; width:100%;">
         <div id="board"></div>
         <div class="board-hint">Tap a piece, then tap a highlighted square — or drag it directly.</div>
+        <button id="flipBoardBtn" class="flip-board-btn">↻ Flip Board</button>
       </div>
     </div>
     <div class="panel" id="movesPanel">
@@ -664,6 +666,7 @@ let dragFrom = null, dragMoved = false, dragStartPos = null, dragGhostEl = null;
 let pendingPromotion = null; // { options: [move, ...] }
 
 const boardEl = document.getElementById('board');
+let boardFlipped = false;
 const sheetBody = document.getElementById('sheetBody');
 const emptyState = document.getElementById('emptyState');
 const turnLabel = document.getElementById('turnLabel');
@@ -694,8 +697,10 @@ function renderBoard(state, lastMove) {
   boardEl.innerHTML = '';
   squareEls = new Array(64).fill(null);
   const checkSq = isKingInCheck(state, state.turn) ? findKing(state, state.turn) : -1;
-  for (let rank = 7; rank >= 0; rank--) {
-    for (let file = 0; file < 8; file++) {
+  const rankOrder = boardFlipped ? [0,1,2,3,4,5,6,7] : [7,6,5,4,3,2,1,0];
+  const fileOrder = boardFlipped ? [7,6,5,4,3,2,1,0] : [0,1,2,3,4,5,6,7];
+  for (const rank of rankOrder) {
+    for (const file of fileOrder) {
       const i = idx(file, rank);
       const sq = document.createElement('div');
       sq.className = 'board-sq ' + (((file + rank) % 2 === 0) ? 'dark' : 'light');
@@ -715,10 +720,11 @@ function squareFromClientXY(clientX, clientY) {
   const rect = boardEl.getBoundingClientRect();
   const relX = clientX - rect.left, relY = clientY - rect.top;
   if (relX < 0 || relY < 0 || relX >= rect.width || relY >= rect.height) return null;
-  const file = Math.floor(relX / (rect.width / 8));
-  const rankFromTop = Math.floor(relY / (rect.height / 8));
-  const rank = 7 - rankFromTop;
-  if (file < 0 || file > 7 || rank < 0 || rank > 7) return null;
+  const colFromLeft = Math.floor(relX / (rect.width / 8));
+  const rowFromTop = Math.floor(relY / (rect.height / 8));
+  if (colFromLeft < 0 || colFromLeft > 7 || rowFromTop < 0 || rowFromTop > 7) return null;
+  const file = boardFlipped ? (7 - colFromLeft) : colFromLeft;
+  const rank = boardFlipped ? rowFromTop : (7 - rowFromTop);
   return idx(file, rank);
 }
 
@@ -1003,6 +1009,7 @@ function resetOnlineState() {
   onlineState.pollTimer = null;
   onlineState.seenHostIce = 0;
   onlineState.seenGuestIce = 0;
+  boardFlipped = false;
   document.getElementById('onlineBadge').style.display = 'none';
   document.getElementById('leaveOnlineBtn').style.display = 'none';
 }
@@ -1035,6 +1042,7 @@ function watchConnectionState(pc) {
 function setupDataChannelHandlers(channel) {
   channel.onopen = () => {
     onlineState.connected = true;
+    boardFlipped = onlineState.myColor === 'b';
     if (onlineState.pollTimer) { clearInterval(onlineState.pollTimer); onlineState.pollTimer = null; }
     document.getElementById('onlineModal').classList.remove('visible');
     const badge = document.getElementById('onlineBadge');
@@ -1198,6 +1206,11 @@ document.getElementById('joinGameBtn').addEventListener('click', () => {
   if (code.length !== 6) { showOnlineError('Enter the 6-character room code.'); return; }
   document.getElementById('onlineChoice').style.display = 'none';
   joinOnlineGame(code);
+});
+
+document.getElementById('flipBoardBtn').addEventListener('click', () => {
+  boardFlipped = !boardFlipped;
+  renderAll();
 });
 
 // ---------- wiring ----------
