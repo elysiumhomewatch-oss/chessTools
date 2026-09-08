@@ -5,4 +5,4 @@ compatibility_date = "2024-09-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "chess-relay-db"
-database_id = "PASTE_YOUR_DATABASE_ID_HERE"
+database_id = "a60a7156-8467-4663-8ba3-b32e973ebf82"
