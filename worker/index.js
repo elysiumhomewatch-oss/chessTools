@@ -1,8 +1,10 @@
 // Chess Relay Worker
-// Pure signaling mailbox for WebRTC handshakes (offer/answer/ICE),
-// keyed by a short room code. Once the peer connection is up, chess
-// moves travel directly between the two browsers — this worker and
-// D1 never see any game state.
+// Pure signaling mailbox for a WebRTC handshake, keyed by a short room code.
+// Uses non-trickle ICE — each side gathers all its ICE candidates locally
+// before sending its offer/answer, so the SDP already contains everything
+// needed and there's no separate candidate-by-candidate exchange to manage.
+// Once the peer connection is up, chess moves travel directly between the
+// two browsers — this worker and D1 never see any game state.
 
 function corsHeaders() {
   return {
@@ -51,13 +53,13 @@ export default {
 
       const now = Date.now();
       await env.DB.prepare(
-        'INSERT INTO games (code, host_offer, status, host_ice, guest_ice, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
-      ).bind(code, JSON.stringify(body.offer), 'waiting', '[]', '[]', now, now).run();
+        'INSERT INTO games (code, host_offer, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+      ).bind(code, JSON.stringify(body.offer), 'waiting', now, now).run();
 
       return json({ code });
     }
 
-    // GET /api/game/:code -> { status, offer, answer, hostIce, guestIce }
+    // GET /api/game/:code -> { status, offer, answer }
     const gameMatch = path.match(/^\/api\/game\/([A-Z0-9]{6})$/);
     if (gameMatch && req.method === 'GET') {
       const code = gameMatch[1];
@@ -67,8 +69,6 @@ export default {
         status: row.status,
         offer: JSON.parse(row.host_offer),
         answer: row.guest_answer ? JSON.parse(row.guest_answer) : null,
-        hostIce: JSON.parse(row.host_ice || '[]'),
-        guestIce: JSON.parse(row.guest_ice || '[]'),
       });
     }
 
@@ -85,24 +85,6 @@ export default {
 
       await env.DB.prepare('UPDATE games SET guest_answer = ?, status = ?, updated_at = ? WHERE code = ?')
         .bind(JSON.stringify(body.answer), 'answered', Date.now(), code).run();
-      return json({ ok: true });
-    }
-
-    // POST /api/ice/:code  { role: 'host'|'guest', candidate }
-    const iceMatch = path.match(/^\/api\/ice\/([A-Z0-9]{6})$/);
-    if (iceMatch && req.method === 'POST') {
-      const code = iceMatch[1];
-      const body = await req.json().catch(() => ({}));
-      if (!body.role || !body.candidate || (body.role !== 'host' && body.role !== 'guest')) {
-        return json({ error: 'missing/invalid role or candidate' }, 400);
-      }
-      const col = body.role === 'host' ? 'host_ice' : 'guest_ice';
-      // Atomic append via SQLite's JSON functions — avoids the read-modify-write
-      // race that dropped candidates when several arrived close together.
-      const result = await env.DB.prepare(
-        `UPDATE games SET ${col} = json_insert(${col}, '$[#]', json(?)), updated_at = ? WHERE code = ?`
-      ).bind(JSON.stringify(body.candidate), Date.now(), code).run();
-      if (result.meta.changes === 0) return json({ error: 'not found' }, 404);
       return json({ ok: true });
     }
 

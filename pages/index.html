@@ -636,7 +636,7 @@ const PIECE_GLYPH = { K:'♔',Q:'♕',R:'♖',B:'♗',N:'♘',P:'♙', k:'♚',q
    The Cloudflare Worker + D1 are only a mailbox for exchanging the
    SDP offer/answer and ICE candidates during connection setup.
    ============================================================ */
-const WORKER_URL = 'https://chess-relay.morneydeetlefs.workers.dev';
+const WORKER_URL = 'https://chess-relay.YOUR-SUBDOMAIN.workers.dev'; // <-- set this after deploying the worker
 const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
 
 const onlineState = {
@@ -649,8 +649,6 @@ const onlineState = {
   channel: null,
   applyingRemote: false,
   pollTimer: null,
-  seenHostIce: 0,
-  seenGuestIce: 0,
 };
 
 let stateStack = [initialState()];
@@ -1007,8 +1005,6 @@ function resetOnlineState() {
   onlineState.pc = null;
   onlineState.channel = null;
   onlineState.pollTimer = null;
-  onlineState.seenHostIce = 0;
-  onlineState.seenGuestIce = 0;
   boardFlipped = false;
   document.getElementById('onlineBadge').style.display = 'none';
   document.getElementById('leaveOnlineBtn').style.display = 'none';
@@ -1031,7 +1027,7 @@ function handleOnlineMessage(msg) {
 function watchConnectionState(pc) {
   pc.onconnectionstatechange = () => {
     if (pc.connectionState === 'failed') {
-      showOnlineError('Could not establish a connection between devices. Try again — if it keeps failing, one device may be on a network that blocks peer-to-peer connections.');
+      showOnlineError('Could not establish a connection between devices. Try again, or check that both devices have a working internet connection.');
       document.getElementById('onlineModal').classList.add('visible');
       resetOnlineState();
       renderAll();
@@ -1059,36 +1055,34 @@ function setupDataChannelHandlers(channel) {
   channel.onmessage = e => { try { handleOnlineMessage(JSON.parse(e.data)); } catch (err) {} };
 }
 
-async function pollIce(code, role) {
+// Non-trickle ICE: wait for candidate gathering to finish so the offer/answer
+// SDP already contains every candidate, sent as a single message. Simpler and
+// more robust than streaming candidates one at a time for a connect-once game.
+function waitForIceGatheringComplete(pc) {
+  return new Promise(resolve => {
+    if (pc.iceGatheringState === 'complete') { resolve(); return; }
+    function check() {
+      if (pc.iceGatheringState === 'complete') {
+        pc.removeEventListener('icegatheringstatechange', check);
+        resolve();
+      }
+    }
+    pc.addEventListener('icegatheringstatechange', check);
+    setTimeout(resolve, 3000); // don't block forever if gathering stalls
+  });
+}
+
+async function pollForAnswer(code) {
   try {
     const res = await fetch(`${WORKER_URL}/api/game/${code}`);
     if (!res.ok) return;
     const data = await res.json();
-
-    // Must set the remote description (the answer) BEFORE adding remote ICE
-    // candidates — addIceCandidate throws if called first, per the WebRTC spec.
-    if (role === 'host' && data.answer && !onlineState.pc.currentRemoteDescription) {
-      await onlineState.pc.setRemoteDescription(data.answer);
-      setOnlineStatus('Opponent found — connecting…');
-    }
-
-    if (onlineState.pc.remoteDescription) {
-      const incoming = role === 'host' ? data.guestIce : data.hostIce;
-      const seenKey = role === 'host' ? 'seenGuestIce' : 'seenHostIce';
-      for (let i = onlineState[seenKey]; i < incoming.length; i++) {
-        try { await onlineState.pc.addIceCandidate(incoming[i]); } catch (err) { console.error('addIceCandidate failed:', err); }
-      }
-      onlineState[seenKey] = incoming.length;
-    }
-  } catch (err) { console.error('pollIce failed:', err); }
-}
-
-
-function postIce(code, role, candidate) {
-  fetch(`${WORKER_URL}/api/ice/${code}`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ role, candidate }),
-  }).catch(() => {});
+    if (!data.answer || onlineState.pc.currentRemoteDescription) return;
+    clearInterval(onlineState.pollTimer);
+    onlineState.pollTimer = null;
+    setOnlineStatus('Opponent found — connecting…');
+    await onlineState.pc.setRemoteDescription(data.answer);
+  } catch (err) {}
 }
 
 async function createOnlineGame() {
@@ -1100,19 +1094,15 @@ async function createOnlineGame() {
   try {
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     onlineState.pc = pc;
+    watchConnectionState(pc);
     const channel = pc.createDataChannel('chess');
     onlineState.channel = channel;
     setupDataChannelHandlers(channel);
-    watchConnectionState(pc);
-    const pendingIce = []; // buffer candidates gathered before the room code exists
-    pc.onicecandidate = e => {
-      if (!e.candidate) return;
-      const cand = e.candidate.toJSON();
-      if (onlineState.code) postIce(onlineState.code, 'host', cand);
-      else pendingIce.push(cand);
-    };
+
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
+    await waitForIceGatheringComplete(pc);
+
     setOnlineStatus('Creating room…');
     const res = await fetch(`${WORKER_URL}/api/create`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1120,19 +1110,16 @@ async function createOnlineGame() {
     });
     const data = await res.json();
     onlineState.code = data.code;
-    pendingIce.forEach(cand => postIce(onlineState.code, 'host', cand));
-    pendingIce.length = 0;
     document.getElementById('roomCodeDisplay').textContent = data.code;
     document.getElementById('onlineCreateResult').style.display = 'block';
     document.getElementById('leaveOnlineBtn').style.display = 'block';
     setOnlineStatus('Waiting for opponent to join…');
-    onlineState.pollTimer = setInterval(() => pollIce(onlineState.code, 'host'), 1200);
+    onlineState.pollTimer = setInterval(() => pollForAnswer(onlineState.code), 2000);
   } catch (err) {
     showOnlineError('Could not create a room. Check your connection and try again.');
     resetOnlineState();
   }
 }
-
 
 async function joinOnlineGame(code) {
   if (WORKER_URL.includes('YOUR-SUBDOMAIN')) { showOnlineError('Set WORKER_URL in the code first.'); return; }
@@ -1150,22 +1137,20 @@ async function joinOnlineGame(code) {
 
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     onlineState.pc = pc;
-    pc.ondatachannel = e => { onlineState.channel = e.channel; setupDataChannelHandlers(e.channel); };
     watchConnectionState(pc);
-    pc.onicecandidate = e => { if (e.candidate) postIce(code, 'guest', e.candidate.toJSON()); };
-    await pc.setRemoteDescription(data.offer);
-    for (const cand of data.hostIce) { try { await pc.addIceCandidate(cand); } catch (err) {} }
-    onlineState.seenHostIce = data.hostIce.length;
+    pc.ondatachannel = e => { onlineState.channel = e.channel; setupDataChannelHandlers(e.channel); };
 
+    await pc.setRemoteDescription(data.offer);
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
+    await waitForIceGatheringComplete(pc);
+
     await fetch(`${WORKER_URL}/api/join/${code}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ answer: pc.localDescription.toJSON() }),
     });
     document.getElementById('leaveOnlineBtn').style.display = 'block';
-    setOnlineStatus('Connecting…');
-    onlineState.pollTimer = setInterval(() => pollIce(code, 'guest'), 1200);
+    setOnlineStatus('Waiting for host to connect…');
   } catch (err) {
     showOnlineError('Could not join that room. Check your connection and try again.');
     resetOnlineState();
