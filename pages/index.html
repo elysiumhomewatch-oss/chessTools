@@ -102,8 +102,8 @@
     text-shadow: -1px -1px 0 rgba(0,0,0,0.7), 1px -1px 0 rgba(0,0,0,0.7), -1px 1px 0 rgba(0,0,0,0.7), 1px 1px 0 rgba(0,0,0,0.7);
   }
   .piece-b {
-    color: #3a3f4c;
-    text-shadow: -1px -1px 0 rgba(210,214,224,0.65), 1px -1px 0 rgba(210,214,224,0.65), -1px 1px 0 rgba(210,214,224,0.65), 1px 1px 0 rgba(210,214,224,0.65);
+    color: #0a0a0a;
+    text-shadow: -1px -1px 0 rgba(232,193,90,0.85), 1px -1px 0 rgba(232,193,90,0.85), -1px 1px 0 rgba(232,193,90,0.85), 1px 1px 0 rgba(232,193,90,0.85), 0 0 4px rgba(0,0,0,0.6);
   }
   .drag-ghost {
     position: fixed; pointer-events: none; z-index: 50; font-size: 9vw; transform: translate(-50%, -50%);
@@ -202,6 +202,32 @@
   .export-sheet h2 { font-size: 15px; margin: 0 0 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
   .export-sheet button { width: 100%; background: var(--field-bg); border: 1px solid var(--border); color: var(--text); border-radius: 10px; padding: 13px; font-family: inherit; font-size: 15px; margin-bottom: 8px; cursor: pointer; }
   .export-sheet button:last-child { background: transparent; color: var(--text-dim); margin-bottom: 0; }
+
+  /* ---------- ONLINE PLAY ---------- */
+  .online-modal {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.65); display: none;
+    align-items: center; justify-content: center; z-index: 45; padding: 20px;
+  }
+  .online-modal.visible { display: flex; }
+  .online-card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 22px; width: 100%; max-width: 320px; text-align: center; }
+  .online-card h2 { font-size: 15px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); margin: 0 0 16px; }
+  .online-card button { width: 100%; font-family: inherit; cursor: pointer; }
+  #createGameBtn, #joinGameBtn { background: var(--accent); color: #1b1e27; font-weight: 700; border: none; border-radius: 10px; padding: 12px; font-size: 14px; }
+  .online-divider { color: var(--text-dim); font-size: 12px; margin: 14px 0; }
+  #joinCodeInput {
+    width: 100%; background: var(--field-bg); border: 1px solid var(--border); color: var(--text);
+    border-radius: 8px; padding: 11px; font-size: 18px; letter-spacing: 3px; text-align: center;
+    text-transform: uppercase; margin-bottom: 10px; font-family: 'Consolas', monospace;
+  }
+  .room-code-label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+  .room-code { font-size: 34px; font-weight: 700; letter-spacing: 5px; color: var(--accent); font-family: 'Consolas', monospace; margin-bottom: 6px; }
+  .room-code-hint { font-size: 12px; color: var(--text-dim); margin-bottom: 4px; }
+  .online-status { font-size: 12.5px; color: var(--accent); min-height: 16px; margin-top: 10px; }
+  .online-error { font-size: 12.5px; color: var(--danger); min-height: 16px; }
+  .online-cancel { background: transparent; border: none; color: var(--text-dim); padding: 10px; font-size: 13px; margin-top: 6px; }
+
+  .online-badge { display: none; align-items: center; gap: 6px; font-size: 12px; color: var(--accent); margin-top: 6px; }
+  .online-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); flex-shrink: 0; }
 </style>
 </head>
 <body>
@@ -210,6 +236,7 @@
   <header>
     <h1>Scoresheet</h1>
     <div class="header-btns">
+      <button class="icon-btn" id="onlineBtn">Online</button>
       <button class="icon-btn" id="exportBtn">Export</button>
       <button class="icon-btn" id="newGameBtn">New Game</button>
     </div>
@@ -221,6 +248,7 @@
       <span class="move-no" id="moveNoLabel">Move 1</span>
     </div>
     <div class="status-note" id="statusNote"></div>
+    <div class="online-badge" id="onlineBadge"><span class="online-dot"></span><span id="onlineBadgeText"></span></div>
   </div>
 
   <div class="tabs">
@@ -314,6 +342,27 @@
       <button data-p="B" aria-label="Bishop">♝</button>
       <button data-p="N" aria-label="Knight">♞</button>
     </div>
+  </div>
+</div>
+
+<div class="online-modal" id="onlineModal">
+  <div class="online-card">
+    <h2>Play Online</h2>
+    <div id="onlineChoice">
+      <button id="createGameBtn">Create Game (play White)</button>
+      <div class="online-divider">or</div>
+      <input type="text" id="joinCodeInput" placeholder="Room code" maxlength="6" autocapitalize="characters" autocomplete="off" autocorrect="off" spellcheck="false">
+      <button id="joinGameBtn">Join Game (play Black)</button>
+    </div>
+    <div id="onlineCreateResult" style="display:none;">
+      <div class="room-code-label">Room code</div>
+      <div class="room-code" id="roomCodeDisplay">------</div>
+      <div class="room-code-hint">Share this with your opponent.</div>
+    </div>
+    <div class="online-status" id="onlineStatus"></div>
+    <div class="online-error" id="onlineError"></div>
+    <button class="online-cancel" id="leaveOnlineBtn" style="display:none; color: var(--danger);">Leave Game</button>
+    <button class="online-cancel" id="closeOnlineBtn">Close</button>
   </div>
 </div>
 
@@ -580,6 +629,28 @@ function positionSignature(state) {
    ============================================================ */
 const PIECE_GLYPH = { K:'♔',Q:'♕',R:'♖',B:'♗',N:'♘',P:'♙', k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟' };
 
+/* ============================================================
+   ONLINE PLAY — a WebRTC data channel carries moves peer-to-peer.
+   The Cloudflare Worker + D1 are only a mailbox for exchanging the
+   SDP offer/answer and ICE candidates during connection setup.
+   ============================================================ */
+const WORKER_URL = 'https://chess-relay.YOUR-SUBDOMAIN.workers.dev'; // <-- set this after deploying the worker
+const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
+
+const onlineState = {
+  active: false,      // host or guest of an online game (pending or connected)
+  connected: false,   // data channel is open
+  myColor: null,
+  role: null,          // 'host' | 'guest'
+  code: null,
+  pc: null,
+  channel: null,
+  applyingRemote: false,
+  pollTimer: null,
+  seenHostIce: 0,
+  seenGuestIce: 0,
+};
+
 let stateStack = [initialState()];
 let plyHistory = []; // {san, color, draw}
 let drawOfferPending = false;
@@ -712,6 +783,7 @@ document.querySelectorAll('#promoPicker [data-p]').forEach(btn => {
 
 function onBoardPointerDown(e) {
   if (gameOver || pendingPromotion) return;
+  if (onlineState.connected && currentState().turn !== onlineState.myColor) return;
   const square = squareFromClientXY(e.clientX, e.clientY);
   if (square === null) return;
   const state = currentState();
@@ -808,11 +880,17 @@ function renderAll() {
   renderBoard(state, lastMove);
   renderStatus(state);
   renderSheet();
-  const disable = gameOver;
+  const notMyTurn = onlineState.connected && state.turn !== onlineState.myColor;
+  const disable = gameOver || notMyTurn;
   moveInput.disabled = disable;
   recordBtn.disabled = disable;
-  undoBtn.disabled = plyHistory.length === 0;
+  undoBtn.disabled = plyHistory.length === 0 || onlineState.connected;
   padButtons.forEach(b => b.disabled = disable);
+  if (onlineState.connected) {
+    document.getElementById('onlineBadgeText').textContent = notMyTurn
+      ? "Online — opponent's move"
+      : 'Online — your move (' + (onlineState.myColor === 'w' ? 'White' : 'Black') + ')';
+  }
 }
 
 function showError(msg) { errorMsg.textContent = msg; }
@@ -856,10 +934,12 @@ function commitMove(move) {
   clearSelection();
   checkGameEnd(newState);
   renderAll();
+  if (onlineState.connected && !onlineState.applyingRemote) sendOnlineMessage({ type: 'move', move });
 }
 
 function tryRecordMove() {
   if (gameOver) return;
+  if (onlineState.connected && currentState().turn !== onlineState.myColor) return;
   const raw = moveInput.value.trim();
   if (!raw) return;
   const state = currentState();
@@ -885,8 +965,11 @@ function undoMove() {
   renderAll();
 }
 
-function newGame() {
-  if (plyHistory.length > 0 && !confirm('Start a new game? This clears the current scoresheet.')) return;
+function newGame(fromRemote) {
+  if (!fromRemote) {
+    if (plyHistory.length > 0 && !confirm('Start a new game? This clears the current scoresheet.')) return;
+    if (onlineState.connected) sendOnlineMessage({ type: 'newgame' });
+  }
   stateStack = [initialState()];
   plyHistory = [];
   drawOfferPending = false;
@@ -899,6 +982,202 @@ function newGame() {
   renderAll();
 }
 
+// ---------- online play ----------
+function setOnlineStatus(text) { document.getElementById('onlineStatus').textContent = text; }
+function showOnlineError(msg) {
+  document.getElementById('onlineError').textContent = msg;
+  document.getElementById('onlineChoice').style.display = 'block';
+  document.getElementById('onlineCreateResult').style.display = 'none';
+}
+
+function resetOnlineState() {
+  if (onlineState.pollTimer) clearInterval(onlineState.pollTimer);
+  if (onlineState.pc) { try { onlineState.pc.close(); } catch (e) {} }
+  onlineState.active = false;
+  onlineState.connected = false;
+  onlineState.myColor = null;
+  onlineState.role = null;
+  onlineState.code = null;
+  onlineState.pc = null;
+  onlineState.channel = null;
+  onlineState.pollTimer = null;
+  onlineState.seenHostIce = 0;
+  onlineState.seenGuestIce = 0;
+  document.getElementById('onlineBadge').style.display = 'none';
+  document.getElementById('leaveOnlineBtn').style.display = 'none';
+}
+
+function sendOnlineMessage(msg) {
+  if (onlineState.channel && onlineState.channel.readyState === 'open') onlineState.channel.send(JSON.stringify(msg));
+}
+
+function handleOnlineMessage(msg) {
+  if (msg.type === 'move') {
+    onlineState.applyingRemote = true;
+    commitMove(msg.move);
+    onlineState.applyingRemote = false;
+  } else if (msg.type === 'newgame') {
+    newGame(true);
+  }
+}
+
+function setupDataChannelHandlers(channel) {
+  channel.onopen = () => {
+    onlineState.connected = true;
+    if (onlineState.pollTimer) { clearInterval(onlineState.pollTimer); onlineState.pollTimer = null; }
+    document.getElementById('onlineModal').classList.remove('visible');
+    const badge = document.getElementById('onlineBadge');
+    badge.style.display = 'flex';
+    badge.querySelector('.online-dot').style.background = 'var(--good)';
+    renderAll();
+  };
+  channel.onclose = () => {
+    onlineState.connected = false;
+    document.getElementById('onlineBadge').querySelector('.online-dot').style.background = 'var(--danger)';
+    document.getElementById('onlineBadgeText').textContent = 'Opponent disconnected — continuing locally';
+    renderAll();
+  };
+  channel.onmessage = e => { try { handleOnlineMessage(JSON.parse(e.data)); } catch (err) {} };
+}
+
+async function pollIce(code, role) {
+  try {
+    const res = await fetch(`${WORKER_URL}/api/game/${code}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const incoming = role === 'host' ? data.guestIce : data.hostIce;
+    const seenKey = role === 'host' ? 'seenGuestIce' : 'seenHostIce';
+    for (let i = onlineState[seenKey]; i < incoming.length; i++) {
+      try { await onlineState.pc.addIceCandidate(incoming[i]); } catch (err) {}
+    }
+    onlineState[seenKey] = incoming.length;
+    if (role === 'host' && data.answer && !onlineState.pc.currentRemoteDescription) {
+      await onlineState.pc.setRemoteDescription(data.answer);
+      setOnlineStatus('Opponent found — connecting…');
+    }
+  } catch (err) {}
+}
+
+async function createOnlineGame() {
+  if (WORKER_URL.includes('YOUR-SUBDOMAIN')) { showOnlineError('Set WORKER_URL in the code first.'); return; }
+  resetOnlineState();
+  onlineState.active = true;
+  onlineState.role = 'host';
+  onlineState.myColor = 'w';
+  try {
+    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    onlineState.pc = pc;
+    const channel = pc.createDataChannel('chess');
+    onlineState.channel = channel;
+    setupDataChannelHandlers(channel);
+    pc.onicecandidate = e => {
+      if (e.candidate) {
+        fetch(`${WORKER_URL}/api/ice/${onlineState.code}`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ role: 'host', candidate: e.candidate.toJSON() }),
+        }).catch(() => {});
+      }
+    };
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    setOnlineStatus('Creating room…');
+    const res = await fetch(`${WORKER_URL}/api/create`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ offer: pc.localDescription.toJSON() }),
+    });
+    const data = await res.json();
+    onlineState.code = data.code;
+    document.getElementById('roomCodeDisplay').textContent = data.code;
+    document.getElementById('onlineCreateResult').style.display = 'block';
+    document.getElementById('leaveOnlineBtn').style.display = 'block';
+    setOnlineStatus('Waiting for opponent to join…');
+    onlineState.pollTimer = setInterval(() => pollIce(onlineState.code, 'host'), 1200);
+  } catch (err) {
+    showOnlineError('Could not create a room. Check your connection and try again.');
+    resetOnlineState();
+  }
+}
+
+async function joinOnlineGame(code) {
+  if (WORKER_URL.includes('YOUR-SUBDOMAIN')) { showOnlineError('Set WORKER_URL in the code first.'); return; }
+  resetOnlineState();
+  onlineState.active = true;
+  onlineState.role = 'guest';
+  onlineState.myColor = 'b';
+  onlineState.code = code;
+  try {
+    setOnlineStatus('Looking up room…');
+    const res = await fetch(`${WORKER_URL}/api/game/${code}`);
+    if (!res.ok) { showOnlineError('Room not found. Check the code and try again.'); onlineState.active = false; return; }
+    const data = await res.json();
+    if (data.answer) { showOnlineError('That room is already full.'); onlineState.active = false; return; }
+
+    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    onlineState.pc = pc;
+    pc.ondatachannel = e => { onlineState.channel = e.channel; setupDataChannelHandlers(e.channel); };
+    pc.onicecandidate = e => {
+      if (e.candidate) {
+        fetch(`${WORKER_URL}/api/ice/${code}`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ role: 'guest', candidate: e.candidate.toJSON() }),
+        }).catch(() => {});
+      }
+    };
+    await pc.setRemoteDescription(data.offer);
+    for (const cand of data.hostIce) { try { await pc.addIceCandidate(cand); } catch (err) {} }
+    onlineState.seenHostIce = data.hostIce.length;
+
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    await fetch(`${WORKER_URL}/api/join/${code}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ answer: pc.localDescription.toJSON() }),
+    });
+    document.getElementById('leaveOnlineBtn').style.display = 'block';
+    setOnlineStatus('Connecting…');
+    onlineState.pollTimer = setInterval(() => pollIce(code, 'guest'), 1200);
+  } catch (err) {
+    showOnlineError('Could not join that room. Check your connection and try again.');
+    resetOnlineState();
+  }
+}
+
+document.getElementById('onlineBtn').addEventListener('click', () => {
+  document.getElementById('onlineError').textContent = '';
+  if (onlineState.active) {
+    document.getElementById('onlineChoice').style.display = 'none';
+    document.getElementById('onlineCreateResult').style.display = (onlineState.role === 'host' && !onlineState.connected) ? 'block' : 'none';
+    setOnlineStatus(onlineState.connected
+      ? 'Connected — playing ' + (onlineState.myColor === 'w' ? 'White' : 'Black')
+      : (onlineState.role === 'host' ? 'Waiting for opponent…' : 'Connecting…'));
+    document.getElementById('leaveOnlineBtn').style.display = 'block';
+  } else {
+    document.getElementById('onlineChoice').style.display = 'block';
+    document.getElementById('onlineCreateResult').style.display = 'none';
+    setOnlineStatus('');
+    document.getElementById('leaveOnlineBtn').style.display = 'none';
+  }
+  document.getElementById('onlineModal').classList.add('visible');
+});
+document.getElementById('closeOnlineBtn').addEventListener('click', () => {
+  document.getElementById('onlineModal').classList.remove('visible');
+});
+document.getElementById('leaveOnlineBtn').addEventListener('click', () => {
+  resetOnlineState();
+  document.getElementById('onlineModal').classList.remove('visible');
+  renderAll();
+});
+document.getElementById('createGameBtn').addEventListener('click', () => {
+  document.getElementById('onlineChoice').style.display = 'none';
+  createOnlineGame();
+});
+document.getElementById('joinGameBtn').addEventListener('click', () => {
+  const code = document.getElementById('joinCodeInput').value.trim().toUpperCase();
+  if (code.length !== 6) { showOnlineError('Enter the 6-character room code.'); return; }
+  document.getElementById('onlineChoice').style.display = 'none';
+  joinOnlineGame(code);
+});
+
 // ---------- wiring ----------
 padButtons.forEach(btn => btn.addEventListener('click', () => { moveInput.value += btn.dataset.insert; moveInput.focus(); clearError(); }));
 document.getElementById('backspaceBtn').addEventListener('click', () => { moveInput.value = moveInput.value.slice(0, -1); moveInput.focus(); });
@@ -906,8 +1185,8 @@ document.getElementById('clearBtn').addEventListener('click', () => { moveInput.
 drawOfferBtn.addEventListener('click', () => { drawOfferPending = !drawOfferPending; drawOfferBtn.classList.toggle('on', drawOfferPending); });
 recordBtn.addEventListener('click', tryRecordMove);
 undoBtn.addEventListener('click', undoMove);
-newGameBtn.addEventListener('click', newGame);
-bannerNewGameBtn.addEventListener('click', newGame);
+newGameBtn.addEventListener('click', () => newGame(false));
+bannerNewGameBtn.addEventListener('click', () => newGame(false));
 moveInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); tryRecordMove(); } });
 moveInput.addEventListener('input', clearError);
 
